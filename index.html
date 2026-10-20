@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#f7df80">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>My Day</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <style>
+    :root { --paper:#fffdf7; --ink:#282722; --line:#3a3831; --yellow:#fff0b4; --soft:#f2efe5; --muted:#77746c; --blue:#dceef0; }
+    * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html, body { margin:0; width:100%; height:100%; overflow:hidden; background:var(--paper); color:var(--ink); font-family:"Trebuchet MS", "Segoe UI", sans-serif; overscroll-behavior:none; }
+    body.dragging, body.dragging * { user-select:none; -webkit-user-select:none; cursor:grabbing !important; }
+    button { font:inherit; color:inherit; }
+    #app { height:100dvh; max-width:680px; margin:auto; display:flex; flex-direction:column; position:relative; overflow:hidden; background:var(--paper); }
+    header { flex:none; height:67px; display:flex; align-items:end; padding:0 18px 12px; border-bottom:2px solid var(--line); gap:12px; direction:rtl; }
+    h1 { font-size:25px; line-height:1; font-weight:500; font-style:italic; margin:0; flex:1; text-align:right; letter-spacing:.2px; }
+    #layoutToggle { min-width:47px; height:31px; border:1.5px solid var(--line); border-radius:16px; background:transparent; font-size:12px; font-weight:700; direction:ltr; }
+    #layoutToggle:active { background:var(--yellow); transform:scale(.96); }
+    main { min-height:0; flex:1; position:relative; }
+    .layout { height:100%; }
+    .hidden { display:none !important; }
+    .column-name { display:block; width:100%; border:0; background:transparent; padding:13px 12px 7px; min-height:48px; text-align:right; font-size:21px; line-height:1; font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .rename-hint { font-size:11px; display:none; color:var(--muted); padding:0 12px 5px; text-align:right; }
+    .renaming .rename-hint { display:block; }
+    .column { background:var(--paper); border-inline-start:2px solid var(--line); min-width:40%; max-width:40%; height:100%; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; scroll-snap-align:start; transition:background .15s, outline .15s; }
+    .column::-webkit-scrollbar, .cards::-webkit-scrollbar, .active-list::-webkit-scrollbar { display:none; }
+    .column.active, .active-panel { background:var(--yellow); }
+    .column.drop-target, .card.drop-target { outline:3px dashed var(--line); outline-offset:-5px; background:var(--blue); }
+    #layoutA { display:flex; flex-direction:row; overflow-x:auto; overflow-y:hidden; scroll-snap-type:x mandatory; scroll-behavior:smooth; direction:rtl; overscroll-behavior-x:contain; }
+    .item-list { padding:0 8px 95px; min-height:100px; }
+    .item { min-height:48px; display:flex; flex-direction:row; align-items:center; gap:8px; padding:7px 5px; border-radius:7px; touch-action:pan-y; }
+    .item:active { background:rgba(255,255,255,.45); }
+    .card-item { text-align:right; }
+    .item-text { flex:1; font-size:18px; line-height:1.15; text-align:right; overflow-wrap:anywhere; }
+    .item.done .item-text { text-decoration:line-through; color:#716d62; }
+    .check { appearance:none; -webkit-appearance:none; width:22px; height:22px; flex:none; border:2px solid var(--line); background:var(--paper); border-radius:2px; margin:0; position:relative; }
+    .check:checked::after { content:"✓"; position:absolute; inset:-5px 0 0 1px; font-size:25px; font-weight:bold; line-height:1; }
+    #layoutB { display:flex; direction:rtl; overflow:hidden; }
+    .active-panel { width:58%; height:100%; flex:none; border-inline-start:2px solid var(--line); overflow:hidden; display:flex; flex-direction:column; }
+    .active-panel .column-name { padding-top:16px; }
+    .active-list { overflow-y:auto; flex:1; overscroll-behavior:contain; }
+    .cards { width:42%; height:100%; overflow-y:auto; direction:rtl; padding:10px 8px 95px; overscroll-behavior:contain; }
+    .card { background:var(--paper); border:2px solid var(--line); border-radius:11px; padding:7px 8px 9px; margin-bottom:12px; min-height:108px; direction:rtl; }
+    .card.active-card { background:var(--yellow); }
+    .card-name { width:100%; background:transparent; border:0; text-align:right; font-size:20px; font-style:italic; padding:1px 0 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .card-item { font-size:14px; line-height:1.45; padding:1px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .more { color:var(--muted); font-size:13px; padding-top:4px; direction:ltr; text-align:right; }
+    #add { position:absolute; z-index:6; bottom:max(18px, env(safe-area-inset-bottom)); right:18px; width:55px; height:55px; border-radius:50%; border:2px solid var(--line); background:var(--yellow); font-size:31px; line-height:1; box-shadow:0 2px 0 rgba(0,0,0,.12); }
+    #add:active { transform:scale(.93); }
+    #dragGhost { position:fixed; z-index:30; pointer-events:none; display:none; min-width:130px; max-width:240px; padding:10px 14px; border:2px dashed var(--line); border-radius:8px; background:var(--paper); box-shadow:4px 5px 0 rgba(0,0,0,.13); font-size:17px; direction:auto; }
+    .drag-source { opacity:.28; }
+    @media (min-width:681px) { #app { border-inline:1px solid #dedacf; } }
+    @media (prefers-reduced-motion: reduce) { * { scroll-behavior:auto !important; transition:none !important; } }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header><h1>My Day</h1><button id="layoutToggle" aria-label="Switch layout">A | B</button></header>
+  <main>
+    <section id="layoutA" class="layout" aria-label="Columns layout"></section>
+    <section id="layoutB" class="layout hidden" aria-label="Column and cards layout"></section>
+    <button id="add" aria-label="Add task">+</button>
+  </main>
+</div>
+<div id="dragGhost" aria-hidden="true"></div>
+<script>
+(() => {
+  const KEY = 'my-day-columns-v1';
+  const defaultData = { layout:'A', active:0, columns:[
+    {name:'Calls', items:['Ibrahim','Bank','Mom','Ali','Dentist','Fuel station']},
+    {name:'Work', items:['Report','Email Sara','Invoice','Meeting']},
+    {name:'Shop', items:['Milk','Bread','Rice','Coffee']},
+    {name:'Place 1', items:['Visit office','Keys','Parcel']},
+    {name:'Place 2', items:['Book taxi','Call doctor','Water plants']}
+  ]};
+  let data;
+  try { data = JSON.parse(localStorage.getItem(KEY)) || defaultData; } catch { data = defaultData; }
+  data.columns.forEach(c => c.items = c.items.map(x => typeof x === 'string' ? ({id:crypto.randomUUID(), text:x, done:false}) : x));
+  const a = document.querySelector('#layoutA'), b = document.querySelector('#layoutB'), toggle = document.querySelector('#layoutToggle');
+  const ghost = document.querySelector('#dragGhost'); let press = null, dragging = null, timer = null, lastTarget = null;
+  const save = () => localStorage.setItem(KEY, JSON.stringify(data));
+  const esc = s => String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  function itemMarkup(item, ci, allowDrag=true) { return `<div class="item ${item.done?'done':''}" data-id="${item.id}" data-col="${ci}" ${allowDrag?'':'data-no-drag="1"'}><input class="check" type="checkbox" ${item.done?'checked':''} aria-label="Mark ${esc(item.text)} done"><span class="item-text" dir="auto">${esc(item.text)}</span></div>`; }
+  function columnMarkup(col, i) { return `<article class="column ${i===data.active?'active':''}" data-col="${i}"><button class="column-name" title="Rename column">${esc(col.name)}</button><div class="rename-hint">Rename</div><div class="item-list">${col.items.map(x=>itemMarkup(x,i)).join('')}</div></article>`; }
+  function cardMarkup(col, i) { const open = col.items.filter(x=>!x.done); return `<article class="card" data-col="${i}"><button class="card-name">${esc(col.name)}</button>${open.slice(0,3).map(x=>`<div class="card-item" dir="auto">${esc(x.text)}</div>`).join('')}${open.length>3?`<div class="more">+${open.length-3}</div>`:''}</article>`; }
+  function render() {
+    a.innerHTML = data.columns.map(columnMarkup).join('');
+    const active = data.columns[data.active]; const others = data.columns.map((c,i)=>({c,i})).filter(x=>x.i!==data.active);
+    b.innerHTML = `<section class="active-panel" data-col="${data.active}"><button class="column-name" title="Rename column">${esc(active.name)}</button><div class="rename-hint">Rename</div><div class="active-list"><div class="item-list">${active.items.map(x=>itemMarkup(x,data.active)).join('')}</div></div></section><aside class="cards" aria-label="Other columns">${others.map(x=>cardMarkup(x.c,x.i)).join('')}</aside>`;
+    a.classList.toggle('hidden', data.layout !== 'A'); b.classList.toggle('hidden', data.layout !== 'B');
+    toggle.textContent = data.layout === 'A' ? 'A | B' : 'B | A'; save();
+  }
+  function setActive(i) { data.active=i; render(); }
+  function rename(btn) { const host=btn.closest('.column, .active-panel'); if (!host.classList.contains('renaming')) { host.classList.add('renaming'); return; } const i=+host.dataset.col; const val=prompt('Column name (max 8 characters)', data.columns[i].name); if(val !== null) { const clean=val.trim().slice(0,8); if(clean) data.columns[i].name=clean; } render(); }
+  document.addEventListener('click', e => {
+    const check=e.target.closest('.check'); if(check) { const row=check.closest('.item'), col=data.columns[+row.dataset.col], item=col.items.find(x=>x.id===row.dataset.id); item.done=check.checked; if(item.done) { col.items=col.items.filter(x=>x!==item); col.items.push(item); } render(); return; }
+    const name=e.target.closest('.column-name'); if(name) { rename(name); return; }
+    const card=e.target.closest('.card'); if(card) { setActive(+card.dataset.col); return; }
+    const col=e.target.closest('.column, .active-panel'); if(col) setActive(+col.dataset.col);
+  });
+  toggle.addEventListener('click', () => { data.layout=data.layout==='A'?'B':'A'; render(); });
+  document.querySelector('#add').addEventListener('click', () => { const text=prompt('New item'); if(text && text.trim()) { data.columns[data.active].items.push({id:crypto.randomUUID(),text:text.trim(),done:false}); render(); } });
+  function eligible(row) { return row && (data.layout==='A' || !!row.closest('.active-panel')); }
+  document.addEventListener('pointerdown', e => {
+    const row=e.target.closest('.item'); if(!eligible(row) || e.target.closest('.check')) return;
+    press={row, x:e.clientX, y:e.clientY, pointerId:e.pointerId};
+    timer=setTimeout(()=>startDrag(),350);
+  }, {passive:true});
+  function startDrag() { if(!press) return; dragging={...press, id:press.row.dataset.id, from:+press.row.dataset.col}; press.row.classList.add('drag-source'); ghost.textContent=press.row.querySelector('.item-text').textContent; ghost.style.display='block'; moveGhost(press.x,press.y); if(navigator.vibrate) navigator.vibrate(15); document.body.classList.add('dragging'); press=null; }
+  function moveGhost(x,y) { ghost.style.transform=`translate(${x+12}px, ${y+12}px)`; }
+  function clearTarget() { if(lastTarget) lastTarget.classList.remove('drop-target'); lastTarget=null; }
+  function targetAt(x,y) { const el=document.elementFromPoint(x,y); if(!el) return null; if(data.layout==='B') return el.closest('.card, .active-panel'); return el.closest('.column'); }
+  function edgeScroll(x) { if(data.layout!=='A' || !dragging) return; const r=a.getBoundingClientRect(); if(x<r.left+45) a.scrollLeft -= 13; if(x>r.right-45) a.scrollLeft += 13; }
+  document.addEventListener('pointermove', e => { if(!press && !dragging) return; if(press && Math.hypot(e.clientX-press.x,e.clientY-press.y)>9) { clearTimeout(timer); press=null; return; } if(dragging) { e.preventDefault(); moveGhost(e.clientX,e.clientY); edgeScroll(e.clientX); const t=targetAt(e.clientX,e.clientY); if(t!==lastTarget) { clearTarget(); if(t) { t.classList.add('drop-target'); lastTarget=t; } } } }, {passive:false});
+  document.addEventListener('pointerup', e => { clearTimeout(timer); if(dragging) drop(e.clientX,e.clientY); press=null; }, {passive:true});
+  document.addEventListener('pointercancel', () => { clearTimeout(timer); cancelDrag(); });
+  function cancelDrag() { if(dragging?.row) dragging.row.classList.remove('drag-source'); dragging=null; ghost.style.display='none'; clearTarget(); document.body.classList.remove('dragging'); }
+  function drop(x,y) { const t=targetAt(x,y), d=dragging; cancelDrag(); if(!t) return; const destination=+t.dataset.col, source=data.columns[d.from], item=source.items.find(x=>x.id===d.id); if(!item) return; const sourceIndex=source.items.indexOf(item); source.items=source.items.filter(x=>x!==item); const dest=data.columns[destination]; let index=dest.items.length;
+    const itemTarget=document.elementFromPoint(x,y)?.closest('.item'); if(itemTarget && +itemTarget.dataset.col===destination) { index=dest.items.findIndex(q=>q.id===itemTarget.dataset.id); if(d.from===destination && sourceIndex<index) index--; }
+    dest.items.splice(Math.max(0,index),0,item); data.active=destination; render();
+  }
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  render();
+})();
+</script>
+</body>
+</html>
