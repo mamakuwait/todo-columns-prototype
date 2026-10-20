@@ -89,12 +89,13 @@
   function cardMarkup(col, i) { const open = col.items.filter(x=>!x.done); return `<article class="card" data-col="${i}"><button class="card-name">${esc(col.name)}</button>${open.slice(0,3).map(x=>`<div class="card-item" dir="auto">${esc(x.text)}</div>`).join('')}${open.length>3?`<div class="more">+${open.length-3}</div>`:''}</article>`; }
   function render() {
     a.innerHTML = data.columns.map(columnMarkup).join('');
-    const active = data.columns[data.active]; const others = data.columns.map((c,i)=>({c,i})).filter(x=>x.i!==data.active);
+    const active = data.columns[data.active]; const others = cardOrder().map(i=>({c:data.columns[i],i}));
     b.innerHTML = `<section class="active-panel" data-col="${data.active}"><button class="column-name" title="Rename column">${esc(active.name)}</button><div class="rename-hint">Rename</div><div class="active-list"><div class="item-list">${active.items.map(x=>itemMarkup(x,data.active)).join('')}</div></div></section><aside class="cards" aria-label="Other columns">${others.map(x=>cardMarkup(x.c,x.i)).join('')}</aside>`;
     a.classList.toggle('hidden', data.layout !== 'A'); b.classList.toggle('hidden', data.layout !== 'B');
     toggle.textContent = data.layout === 'A' ? 'A | B' : 'B | A'; save();
   }
-  function setActive(i) { data.active=i; render(); }
+  function cardOrder() { let o=(data.order||[]).filter(i=>i!==data.active && i<data.columns.length); data.columns.forEach((c,i)=>{ if(i!==data.active && !o.includes(i)) o.push(i); }); data.order=o; return o; }
+  function setActive(i) { if(i===data.active) return; const old=data.active; data.order=cardOrder().filter(x=>x!==i); data.order.unshift(old); data.active=i; render(); }
   function rename(btn) { const host=btn.closest('.column, .active-panel'); if (!host.classList.contains('renaming')) { host.classList.add('renaming'); return; } const i=+host.dataset.col; const val=prompt('Column name (max 8 characters)', data.columns[i].name); if(val !== null) { const clean=val.trim().slice(0,8); if(clean) data.columns[i].name=clean; } render(); }
   document.addEventListener('click', e => {
     const check=e.target.closest('.check'); if(check) { const row=check.closest('.item'), col=data.columns[+row.dataset.col], item=col.items.find(x=>x.id===row.dataset.id); item.done=check.checked; if(item.done) { col.items=col.items.filter(x=>x!==item); col.items.push(item); } render(); return; }
@@ -121,7 +122,7 @@
   function cancelDrag() { if(dragging?.row) dragging.row.classList.remove('drag-source'); dragging=null; ghost.style.display='none'; clearTarget(); document.body.classList.remove('dragging'); }
   function drop(x,y) { const t=targetAt(x,y), d=dragging; cancelDrag(); if(!t) return; const destination=+t.dataset.col, source=data.columns[d.from], item=source.items.find(x=>x.id===d.id); if(!item) return; const sourceIndex=source.items.indexOf(item); source.items=source.items.filter(x=>x!==item); const dest=data.columns[destination]; let index=dest.items.length;
     const itemTarget=document.elementFromPoint(x,y)?.closest('.item'); if(itemTarget && +itemTarget.dataset.col===destination) { index=dest.items.findIndex(q=>q.id===itemTarget.dataset.id); if(d.from===destination && sourceIndex<index) index--; }
-    dest.items.splice(Math.max(0,index),0,item); data.active=destination; render();
+    dest.items.splice(Math.max(0,index),0,item); render();
   }
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(()=>{});
   render();
