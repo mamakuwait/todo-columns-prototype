@@ -53,6 +53,10 @@
     .more { color:var(--muted); font-size:13px; padding-top:4px; direction:ltr; text-align:right; }
     #add { position:absolute; z-index:6; bottom:max(18px, env(safe-area-inset-bottom)); right:18px; width:55px; height:55px; border-radius:50%; border:2px solid var(--line); background:var(--yellow); font-size:31px; line-height:1; box-shadow:0 2px 0 rgba(0,0,0,.12); }
     #add:active { transform:scale(.93); }
+    .done-toggle { display:block; width:100%; margin:10px 0 4px; padding:8px 6px; border:0; border-top:1.5px dashed var(--muted); background:transparent; text-align:right; font-size:15px; color:var(--muted); }
+    #trash { position:absolute; z-index:7; bottom:max(18px, env(safe-area-inset-bottom)); left:18px; width:62px; height:62px; border-radius:50%; border:2px dashed var(--line); background:#fde2dc; font-size:28px; display:none; align-items:center; justify-content:center; }
+    body.dragging #trash { display:flex; } #trash.drop-target { background:#f6b6a8; transform:scale(1.15); }
+    #menuBtn { border:0; background:transparent; font-size:24px; line-height:1; padding:0 4px; }
     #dragGhost { position:fixed; z-index:30; pointer-events:none; display:none; min-width:130px; max-width:240px; padding:10px 14px; border:2px dashed var(--line); border-radius:8px; background:var(--paper); box-shadow:4px 5px 0 rgba(0,0,0,.13); font-size:17px; direction:auto; }
     .drag-source { opacity:.28; }
     @media (min-width:681px) { #app { border-inline:1px solid #dedacf; } }
@@ -61,11 +65,12 @@
 </head>
 <body>
 <div id="app">
-  <header><h1>My Day</h1><div class="seg" role="group" aria-label="Layout"><button id="lay1" data-l="A">1</button><button id="lay2" data-l="B">2</button></div><button id="layoutToggle" hidden></button></header>
+  <header><h1>My Day</h1><div class="seg" role="group" aria-label="Layout"><button id="lay1" data-l="A">1</button><button id="lay2" data-l="B">2</button></div><button id="menuBtn" aria-label="Menu">⋮</button><button id="layoutToggle" hidden></button></header>
   <main>
     <section id="layoutA" class="layout" aria-label="Columns layout"></section>
     <section id="layoutB" class="layout hidden" aria-label="Column and cards layout"></section>
     <button id="add" aria-label="Add task">+</button>
+    <div id="trash" aria-label="Delete">🗑</div>
   </main>
 </div>
 <div id="dragGhost" aria-hidden="true"></div>
@@ -81,18 +86,21 @@
   ]};
   let data;
   try { data = JSON.parse(localStorage.getItem(KEY)) || defaultData; } catch { data = defaultData; }
+  ['Home','Family','Health','Ideas','Car'].forEach(n => { if (data.columns.length < 10) data.columns.push({name:n, items:[]}); });
+  data.openDone = data.openDone || {};
   data.columns.forEach(c => c.items = c.items.map(x => typeof x === 'string' ? ({id:crypto.randomUUID(), text:x, done:false}) : x));
   const a = document.querySelector('#layoutA'), b = document.querySelector('#layoutB'), toggle = document.querySelector('#layoutToggle');
   const ghost = document.querySelector('#dragGhost'); let press = null, dragging = null, timer = null, lastTarget = null;
   const save = () => localStorage.setItem(KEY, JSON.stringify(data));
   const esc = s => String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   function itemMarkup(item, ci, allowDrag=true) { return `<div class="item ${item.done?'done':''}" data-id="${item.id}" data-col="${ci}" ${allowDrag?'':'data-no-drag="1"'}><input class="check" type="checkbox" ${item.done?'checked':''} aria-label="Mark ${esc(item.text)} done"><span class="item-text" dir="auto">${esc(item.text)}</span></div>`; }
-  function columnMarkup(col, i) { return `<article class="column ${i===data.active?'active':''}" data-col="${i}"><button class="column-name" title="Rename column">${esc(col.name)}</button><div class="rename-hint">Rename</div><div class="item-list">${col.items.map(x=>itemMarkup(x,i)).join('')}</div></article>`; }
+  function listMarkup(col, i) { const open=col.items.filter(x=>!x.done), done=col.items.filter(x=>x.done); let h=open.map(x=>itemMarkup(x,i)).join(''); if(done.length){ const on=!!data.openDone[i]; h+=`<button class="done-toggle" data-col="${i}">Done (${done.length}) ${on?'▴':'▾'}</button>`; if(on) h+=done.map(x=>itemMarkup(x,i)).join(''); } return h; }
+  function columnMarkup(col, i) { return `<article class="column ${i===data.active?'active':''}" data-col="${i}"><button class="column-name" title="Rename column">${esc(col.name)}</button><div class="rename-hint">Rename</div><div class="item-list">${listMarkup(col,i)}</div></article>`; }
   function cardMarkup(col, i) { const open = col.items.filter(x=>!x.done); return `<article class="card" data-col="${i}"><button class="card-name">${esc(col.name)}</button>${open.slice(0,3).map(x=>`<div class="card-item" dir="auto">${esc(x.text)}</div>`).join('')}${open.length>3?`<div class="more">+${open.length-3}</div>`:''}</article>`; }
   function render() {
     a.innerHTML = data.columns.map(columnMarkup).join('');
     const active = data.columns[data.active]; const others = cardOrder().map(i=>({c:data.columns[i],i}));
-    b.innerHTML = `<section class="active-panel" data-col="${data.active}"><button class="column-name" title="Rename column">${esc(active.name)}</button><div class="rename-hint">Rename</div><div class="active-list"><div class="item-list">${active.items.map(x=>itemMarkup(x,data.active)).join('')}</div></div></section><aside class="cards" aria-label="Other columns">${others.map(x=>cardMarkup(x.c,x.i)).join('')}</aside>`;
+    b.innerHTML = `<section class="active-panel" data-col="${data.active}"><button class="column-name" title="Rename column">${esc(active.name)}</button><div class="rename-hint">Rename</div><div class="active-list"><div class="item-list">${listMarkup(active,data.active)}</div></div></section><aside class="cards" aria-label="Other columns">${others.map(x=>cardMarkup(x.c,x.i)).join('')}</aside>`;
     a.classList.toggle('hidden', data.layout !== 'A'); b.classList.toggle('hidden', data.layout !== 'B');
     document.querySelector('#lay1').classList.toggle('on', data.layout==='A'); document.querySelector('#lay2').classList.toggle('on', data.layout==='B'); save();
   }
@@ -100,11 +108,14 @@
   function setActive(i) { if(i===data.active) return; const old=data.active; data.order=cardOrder().filter(x=>x!==i); data.order.unshift(old); data.active=i; render(); }
   function rename(btn) { const host=btn.closest('.column, .active-panel'); const i=+host.dataset.col; const val=prompt('Column name (max 8 characters)', data.columns[i].name); if(val !== null) { const clean=val.trim().slice(0,8); if(clean) data.columns[i].name=clean; } render(); }
   document.addEventListener('click', e => {
-    const check=e.target.closest('.check'); if(check) { const row=check.closest('.item'), col=data.columns[+row.dataset.col], item=col.items.find(x=>x.id===row.dataset.id); item.done=check.checked; if(item.done) { col.items=col.items.filter(x=>x!==item); col.items.push(item); } render(); return; }
+    const check=e.target.closest('.check'); if(check) { const row=check.closest('.item'), col=data.columns[+row.dataset.col], item=col.items.find(x=>x.id===row.dataset.id); item.done=check.checked; col.items=col.items.filter(x=>x!==item); if(item.done) col.items.push(item); else col.items.unshift(item); render(); return; }
+    const dt=e.target.closest('.done-toggle'); if(dt) { const i=+dt.dataset.col; data.openDone[i]=!data.openDone[i]; render(); return; }
     const name=e.target.closest('.column-name'); if(name) { rename(name); return; }
     const card=e.target.closest('.card'); if(card) { setActive(+card.dataset.col); return; }
     const col=e.target.closest('.column, .active-panel'); if(col) setActive(+col.dataset.col);
   });
+  document.querySelector('#menuBtn').addEventListener('click', () => { if(confirm('Start empty?
+This removes ALL items and keeps the 10 columns and their names.')) { data.columns.forEach(c=>c.items=[]); data.openDone={}; render(); } });
   document.querySelectorAll('.seg button').forEach(btn => btn.addEventListener('click', () => { data.layout=btn.dataset.l; render(); }));
   document.querySelector('#add').addEventListener('click', () => { const text=prompt('New item for ' + data.columns[data.active].name); if(text && text.trim()) { const id=crypto.randomUUID(); data.columns[data.active].items.unshift({id,text:text.trim(),done:false}); render(); const el=[...document.querySelectorAll('.item')].filter(e=>e.dataset.id===id && e.offsetParent)[0]; if(el){ el.classList.add('new'); el.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'}); } } });
   function eligible(row) { return row && (data.layout==='A' || !!row.closest('.active-panel')); }
@@ -116,14 +127,14 @@
   function startDrag() { if(!press) return; dragging={...press, id:press.row.dataset.id, from:+press.row.dataset.col}; press.row.classList.add('drag-source'); ghost.textContent=press.row.querySelector('.item-text').textContent; ghost.style.display='block'; moveGhost(press.x,press.y); if(navigator.vibrate) navigator.vibrate(15); document.body.classList.add('dragging'); press=null; }
   function moveGhost(x,y) { ghost.style.transform=`translate(${x+12}px, ${y+12}px)`; }
   function clearTarget() { if(lastTarget) lastTarget.classList.remove('drop-target'); lastTarget=null; }
-  function targetAt(x,y) { const el=document.elementFromPoint(x,y); if(!el) return null; if(data.layout==='B') return el.closest('.card, .active-panel'); return el.closest('.column'); }
+  function targetAt(x,y) { const el=document.elementFromPoint(x,y); if(!el) return null; if(el.closest('#trash')) return document.querySelector('#trash'); if(data.layout==='B') return el.closest('.card, .active-panel'); return el.closest('.column'); }
   function edgeScroll(x) { if(data.layout!=='A' || !dragging) return; const r=a.getBoundingClientRect(); if(x<r.left+45) a.scrollLeft -= 13; if(x>r.right-45) a.scrollLeft += 13; }
   document.addEventListener('pointermove', e => { if(!press && !dragging) return; if(press && Math.hypot(e.clientX-press.x,e.clientY-press.y)>9) { clearTimeout(timer); press=null; return; } if(dragging) { e.preventDefault(); moveGhost(e.clientX,e.clientY); edgeScroll(e.clientX); const t=targetAt(e.clientX,e.clientY); if(t!==lastTarget) { clearTarget(); if(t) { t.classList.add('drop-target'); lastTarget=t; } } } }, {passive:false});
   document.addEventListener('pointerup', e => { clearTimeout(timer); if(dragging) drop(e.clientX,e.clientY); press=null; }, {passive:true});
   document.addEventListener('touchmove', e => { if(dragging) e.preventDefault(); }, {passive:false});
   document.addEventListener('pointercancel', () => { clearTimeout(timer); cancelDrag(); });
   function cancelDrag() { if(dragging?.row) dragging.row.classList.remove('drag-source'); dragging=null; ghost.style.display='none'; clearTarget(); document.body.classList.remove('dragging'); }
-  function drop(x,y) { const t=targetAt(x,y), d=dragging; cancelDrag(); if(!t) return; const destination=+t.dataset.col, source=data.columns[d.from], item=source.items.find(x=>x.id===d.id); if(!item) return; const sourceIndex=source.items.indexOf(item); source.items=source.items.filter(x=>x!==item); const dest=data.columns[destination]; let index=dest.items.length;
+  function drop(x,y) { const t=targetAt(x,y), d=dragging; cancelDrag(); if(!t) return; if(t.id==='trash') { const src=data.columns[d.from]; src.items=src.items.filter(x=>x.id!==d.id); render(); return; } const destination=+t.dataset.col, source=data.columns[d.from], item=source.items.find(x=>x.id===d.id); if(!item) return; const sourceIndex=source.items.indexOf(item); source.items=source.items.filter(x=>x!==item); const dest=data.columns[destination]; let index=dest.items.length;
     const itemTarget=document.elementFromPoint(x,y)?.closest('.item'); if(itemTarget && +itemTarget.dataset.col===destination) { index=dest.items.findIndex(q=>q.id===itemTarget.dataset.id); if(d.from===destination && sourceIndex<index) index--; }
     dest.items.splice(Math.max(0,index),0,item); render();
   }
