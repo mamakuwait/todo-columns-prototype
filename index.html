@@ -114,8 +114,7 @@
     const card=e.target.closest('.card'); if(card) { setActive(+card.dataset.col); return; }
     const col=e.target.closest('.column, .active-panel'); if(col) setActive(+col.dataset.col);
   });
-  document.querySelector('#menuBtn').addEventListener('click', () => { if(confirm('Start empty?
-This removes ALL items and keeps the 10 columns and their names.')) { data.columns.forEach(c=>c.items=[]); data.openDone={}; render(); } });
+  document.querySelector('#menuBtn').addEventListener('click', () => { if(confirm('Start empty? This removes ALL items and keeps the 10 columns and their names.')) { data.columns.forEach(c=>c.items=[]); data.openDone={}; render(); } });
   document.querySelectorAll('.seg button').forEach(btn => btn.addEventListener('click', () => { data.layout=btn.dataset.l; render(); }));
   document.querySelector('#add').addEventListener('click', () => { const text=prompt('New item for ' + data.columns[data.active].name); if(text && text.trim()) { const id=crypto.randomUUID(); data.columns[data.active].items.unshift({id,text:text.trim(),done:false}); render(); const el=[...document.querySelectorAll('.item')].filter(e=>e.dataset.id===id && e.offsetParent)[0]; if(el){ el.classList.add('new'); el.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'}); } } });
   function eligible(row) { return row && (data.layout==='A' || !!row.closest('.active-panel')); }
