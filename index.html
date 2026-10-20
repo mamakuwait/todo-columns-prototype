@@ -118,6 +118,7 @@
   function edgeScroll(x) { if(data.layout!=='A' || !dragging) return; const r=a.getBoundingClientRect(); if(x<r.left+45) a.scrollLeft -= 13; if(x>r.right-45) a.scrollLeft += 13; }
   document.addEventListener('pointermove', e => { if(!press && !dragging) return; if(press && Math.hypot(e.clientX-press.x,e.clientY-press.y)>9) { clearTimeout(timer); press=null; return; } if(dragging) { e.preventDefault(); moveGhost(e.clientX,e.clientY); edgeScroll(e.clientX); const t=targetAt(e.clientX,e.clientY); if(t!==lastTarget) { clearTarget(); if(t) { t.classList.add('drop-target'); lastTarget=t; } } } }, {passive:false});
   document.addEventListener('pointerup', e => { clearTimeout(timer); if(dragging) drop(e.clientX,e.clientY); press=null; }, {passive:true});
+  document.addEventListener('touchmove', e => { if(dragging) e.preventDefault(); }, {passive:false});
   document.addEventListener('pointercancel', () => { clearTimeout(timer); cancelDrag(); });
   function cancelDrag() { if(dragging?.row) dragging.row.classList.remove('drag-source'); dragging=null; ghost.style.display='none'; clearTarget(); document.body.classList.remove('dragging'); }
   function drop(x,y) { const t=targetAt(x,y), d=dragging; cancelDrag(); if(!t) return; const destination=+t.dataset.col, source=data.columns[d.from], item=source.items.find(x=>x.id===d.id); if(!item) return; const sourceIndex=source.items.indexOf(item); source.items=source.items.filter(x=>x!==item); const dest=data.columns[destination]; let index=dest.items.length;
